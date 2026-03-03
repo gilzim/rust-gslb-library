@@ -29,14 +29,20 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      # Step 3: Install dependencies
+      # Step 3: Install maturin and dependencies
       - name: Install system and Python dependencies
         run: |
           python -m venv .venv
           source .venv/bin/activate
           python -m pip install --upgrade pip maturin pytest
 
-      # Step 4: Run tests
+      # Step 4: Build and install the library locally
+      - name: Build and install the library
+        run: |
+          source .venv/bin/activate
+          maturin develop
+
+      # Step 5: Run tests
       - name: Run tests
         run: |
           source .venv/bin/activate
