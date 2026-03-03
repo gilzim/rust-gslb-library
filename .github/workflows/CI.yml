@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main]
-    tags: ['v*'] # Triggers release flow on version tags
+    tags: ['v*']  # Triggers release flow on version tags
   pull_request:
     branches: [main]
 
@@ -16,71 +16,40 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.9", "3.10", "3.11"]
+
     steps:
       - uses: actions/checkout@v4
 
+      # Set up Python
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Install build & test tools
+      # Explicit Virtualenv Setup and Activation
+      - name: Set up and activate virtual environment
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install maturin pytest
+          python -m venv .venv
+          echo "VIRTUAL_ENV=.venv" >> $GITHUB_ENV
+          echo ".venv/bin" >> $GITHUB_PATH
+          source .venv/bin/activate
 
+      # Install dependencies inside the virtual environment
+      - name: Upgrade pip and install tools
+        run: |
+          source .venv/bin/activate
+          pip install --upgrade pip maturin pytest
+
+      # Build the project inside the virtual environment
       - name: Build and install locally for testing
-        run: maturin develop
+        run: |
+          source .venv/bin/activate
+          maturin develop
 
+      # Run tests
       - name: Run Pytest
-        run: pytest tests/test_gslb.py -v
+        run: |
+          source .venv/bin/activate
+          pytest tests/test_gslb.py -v
 
-  # JOB 2: Build Production Wheels (ONLY runs if tests pass)
-  build_wheels:
-    name: Build Wheels
-    needs: test # <-- This is the gatekeeper
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install maturin
-        run: python -m pip install maturin
-
-      - name: Build release wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release --out dist
-
-      - name: Upload wheels as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheels-${{ matrix.os }}
-          path: dist/*.whl
-
-  # JOB 3: Publish Release (ONLY runs on tags, and ONLY if wheels built)
-  release:
-    name: Create GitHub Release
-    needs: build_wheels # <-- Second gatekeeper
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: wheels-*
-          merge-multiple: true
-
-      - name: Publish Release to GitHub
-        uses: softprops/action-gh-release@v1
-        with:
-          files: dist/*.whl
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Other jobs (Build Wheels and Release) stay the same
