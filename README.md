@@ -1,8 +1,11 @@
 # gslb_rust
 
-A blazing-fast, minimal-footprint Global Server Load Balancing (GSLB) client library for Python, powered by a native Rust engine.
+A blazing‑fast, minimal‑footprint Global Server Load Balancing (GSLB) client library for Python, powered by a native Rust engine. The current release is **1.0.0** and the package supports CPython **3.7 through 3.12**.
 
-`gslb_rust` allows Python applications to perform client-side load balancing with intelligent latency-based routing, Weighted Round Robin (WRR), and instant failover—all without blocking the Python Global Interpreter Lock (GIL) or consuming significant CPU/Memory resources.
+`gslb_rust` lets Python applications perform client‑side load balancing with
+intelligent latency‑based routing, Weighted Round Robin (WRR), and instant
+failover—all without blocking the Python Global Interpreter Lock (GIL) or
+consuming significant CPU/memory.
 
 ## 🚀 Features
 
@@ -20,21 +23,27 @@ A blazing-fast, minimal-footprint Global Server Load Balancing (GSLB) client lib
 
 ## 📦 Installation
 
-Currently, this library is distributed via GitHub Releases.
+The project ships pre‑built binary wheels for each supported platform and
+Python minor version.  Wheels are attached to the GitHub release for the
+corresponding tag; names are of the form
+`gslb_rust-<version>-cp3XY-cp3XY-<platform>.whl` (e.g. `cp312` for Python 3.12).
 
-1. Go to the Releases Page of this repository.
+To install a wheel manually:
 
-2. Download the `.whl` file that matches your Operating System and Python version.
+```bash
+pip install gslb_rust-<version>-<platform>.whl
+```
 
-3. Install it using `pip`:
-    ```bash
-    pip install gslb_rust-<version>-<platform>.whl
-    ```
+If you prefer, you can also install directly from a GitHub release URL or,
+once published to PyPI, simply `pip install gslb_rust`.
 
 
 ## 💻 Quick Start
 
-The simplest way to use gslb_rust is to provide a list of URLs. The library will continuously monitor them in the background and always return the fastest healthy node.
+The simplest way to use `gslb_rust` is to provide a list of URLs. The
+library will continuously monitor them in the background and always return
+the fastest healthy node.
+
 ```python
 import gslb_rust
 import requests
@@ -42,8 +51,8 @@ import time
 
 # 1. Define your endpoints
 nodes = [
-    "[https://us-east.api.com](https://us-east.api.com)",
-    "[https://eu-west.api.com](https://eu-west.api.com)"
+    "https://us-east.api.com",
+    "https://eu-west.api.com",
 ]
 
 # 2. Initialize the resolver (checks every 5 seconds, 20ms latency margin)
@@ -56,10 +65,10 @@ resolver.spawn_monitor()
 while True:
     # This call takes < 1 microsecond (O(1) lookup in Rust memory)
     best_endpoint = resolver.get_endpoint()
-    
+
     print(f"Routing to: {best_endpoint}")
     # response = requests.get(f"{best_endpoint}/data")
-    
+
     time.sleep(1)
 ```
 
@@ -67,18 +76,38 @@ while True:
 
 ### Weighted Round Robin (WRR)
 
-If you have clusters of different sizes, you can pass a list of (`URL, Weight`) tuples. The library will distribute traffic proportionally among the nodes that fall within the latency margin.
-```python
-# 3-to-1 traffic distribution (75% / 25%)
-weighted_nodes = [
-    ("[https://massive-cluster.api.com](https://massive-cluster.api.com)", 3),
-    ("[https://small-backup.api.com](https://small-backup.api.com)", 1)
-]
+By default, each healthy endpoint contributes an equal share of the
+routing pool.  When you are balancing among clusters with differing
+capacity you can supply a *weight* for each URL.  The resolver will
+first filter nodes by latency margin and then apply WRR to the remaining
+set, distributing traffic proportionally to the weights.
 
-resolver = gslb_rust.GslbResolver(weighted_nodes, interval_secs=5, latency_margin_ms=50)
+Weights are arbitrary positive integers; `2` and `4` are equivalent to
+`1` and `2` (i.e. only the relative ratio matters).
+
+Here’s a simple example – the first call uses equal weight, the second
+uses a 3 : 1 ratio:
+
+```python
+# equal-weight usage (default behavior)
+nodes = [
+    "https://fast.api.com",
+    "https://slow.api.com",
+]
+resolver = gslb_rust.GslbResolver(nodes, interval_secs=5, latency_margin_ms=20)
 resolver.spawn_monitor()
 
-# Subsequent calls to get_endpoint() will respect the 3:1 ratio
+# > roughly 50% of calls go to each endpoint
+
+# weighted usage (75% / 25%)
+weighted_nodes = [
+    ("https://fast.api.com", 3),
+    ("https://slow.api.com", 1),
+]
+resolver = gslb_rust.GslbResolver(weighted_nodes, interval_secs=5, latency_margin_ms=20)
+resolver.spawn_monitor()
+
+# > approximately three quarters of calls will hit the fast endpoint
 ```
 
 ### The "Latency Margin" Explained
@@ -118,18 +147,25 @@ print(stats)
 
 ## 🛠️ Building from Source
 
-If you want to contribute or build the library locally, you will need the Rust toolchain and maturin.
+To build locally (for development or to support a new Python version) you'll
+need the Rust toolchain and `maturin`.
 
-1. Install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-
-2. Install Maturin: `pip install maturin`
-
-3. Clone the repo and run:
-    ```bash
-    maturin develop --release
-    ```
-
+1. Install Rust: 
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ```
+2. Install maturin in your Python environment:
+   ```bash
+   python -m pip install maturin
+   ```
+3. When checked out, build and install the package into a virtualenv:
+   ```bash
+   python -m venv .venv
+   .venv/bin/python -m pip install --upgrade pip
+   .venv/bin/python -m pip install maturin
+   .venv/bin/python -m maturin develop --release
+   ```
 4. Run the test suite:
-    ```bash
-    pytest tests/test_gslb.py
-    ```
+   ```bash
+   .venv/bin/python -m pytest tests/test_gslb.py
+   ```
