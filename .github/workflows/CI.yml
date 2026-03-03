@@ -1,4 +1,4 @@
-name: CI
+name: gslb-python CI/CD Pipeline
 
 on:
   push:
