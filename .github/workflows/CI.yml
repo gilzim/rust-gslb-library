@@ -18,23 +18,19 @@ jobs:
         python: ["3.9", "3.10", "3.11"]
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Set up virtual environment
-        run: python -m venv .venv && source .venv/bin/activate
-
-      - name: Upgrade pip and install tools
+      - name: Install build & test tools
         run: |
-          pip install --upgrade pip
-          pip install maturin pytest
+          python -m pip install --upgrade pip
+          python -m pip install maturin pytest
 
       - name: Build and install locally for testing
-        run: |
-          source .venv/bin/activate
-          maturin develop
+        run: maturin develop
 
       - name: Run Pytest
         run: pytest tests/test_gslb.py -v
