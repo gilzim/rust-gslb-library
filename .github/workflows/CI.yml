@@ -44,7 +44,8 @@ jobs:
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          # include python version to make each matrix entry unique
+          name: wheels-${{ matrix.os }}-py${{ matrix.python }}
           path: dist/*.whl
 
   release:
