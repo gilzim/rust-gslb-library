@@ -2,54 +2,107 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
-    tags: ['v*']  # Triggers release flow on version tags
+    branches:
+      - main  # Run on pushes to main
+    tags:
+      - 'v*'  # Trigger release on version tags
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
-  # JOB 1: Test the code
   test:
-    name: Test on ${{ matrix.os }}
+    name: Test on ${{ matrix.os }} with Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.9", "3.10", "3.11"]
-
     steps:
-      - uses: actions/checkout@v4
+      # Step 1: Check out the code
+      - name: Check out code
+        uses: actions/checkout@v4
 
-      # Set up Python
+      # Step 2: Set up Python
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
 
-      # Explicit Virtualenv Setup and Activation
-      - name: Set up and activate virtual environment
+      # Step 3: Install dependencies
+      - name: Install system and Python dependencies
         run: |
           python -m venv .venv
-          echo "VIRTUAL_ENV=.venv" >> $GITHUB_ENV
-          echo ".venv/bin" >> $GITHUB_PATH
           source .venv/bin/activate
+          python -m pip install --upgrade pip maturin pytest
 
-      # Install dependencies inside the virtual environment
-      - name: Upgrade pip and install tools
+      # Step 4: Run tests
+      - name: Run tests
         run: |
           source .venv/bin/activate
-          pip install --upgrade pip maturin pytest
+          pytest tests/ -v
 
-      # Build the project inside the virtual environment
-      - name: Build and install locally for testing
+  build:
+    name: Build wheels for ${{ matrix.os }}
+    needs: test  # Run only after tests pass
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      # Step 1: Check out the code
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3: Install maturin and dependencies
+      - name: Install maturin and build dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip maturin
+
+      # Step 4: Build wheels
+      - name: Build wheels
         run: |
           source .venv/bin/activate
-          maturin develop
+          maturin build --release --out dist
 
-      # Run tests
-      - name: Run Pytest
-        run: |
-          source .venv/bin/activate
-          pytest tests/test_gslb.py -v
+      # Step 5: Upload wheels as artifacts
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist/*.whl
 
-  # Other jobs (Build Wheels and Release) stay the same
+  release:
+    name: Release Library
+    needs: build  # Run only after build passes
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')  # Run only for tags
+    steps:
+      # Step 1: Check out the code
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # Step 2: Download all built wheels
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-*
+          merge-multiple: true  # Combine wheels from all platforms
+
+      # Step 3: Create GitHub release
+      - name: Publish Release to GitHub
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.whl
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
