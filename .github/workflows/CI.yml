@@ -27,16 +27,22 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Install maturin and test deps
+      - name: Create virtualenv
+        run: python -m venv .venv
+
+      - name: Install tooling, build & test
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install maturin pytest
-
-      - name: Build and install the library
-        run: maturin develop
-
-      - name: Run tests
-        run: pytest tests/ -v
+          # choose correct python executable from .venv
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            venv_python=".venv\\Scripts\\python.exe"
+          else
+            venv_python=".venv/bin/python"
+          fi
+          $venv_python -m pip install --upgrade pip
+          $venv_python -m pip install maturin pytest
+          $venv_python -m maturin develop
+          $venv_python -m pytest tests/ -v
 
   build:
     name: Build wheels for ${{ matrix.os }}
@@ -54,13 +60,20 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install maturin and build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install maturin
+      - name: Create virtualenv
+        run: python -m venv .venv
 
-      - name: Build wheels
-        run: maturin build --release --out dist
+      - name: Install tooling & build wheels
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            venv_python=".venv\\Scripts\\python.exe"
+          else
+            venv_python=".venv/bin/python"
+          fi
+          $venv_python -m pip install --upgrade pip
+          $venv_python -m pip install maturin
+          $venv_python -m maturin build --release --out dist
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
