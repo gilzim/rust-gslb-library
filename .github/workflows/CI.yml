@@ -30,9 +30,13 @@ jobs:
       - name: Create virtualenv
         run: python -m venv .venv
 
-      - name: Install tooling, build & test
+      - name: Install tooling, build wheel & test
         shell: bash
         run: |
+          # ensure we're in workspace root
+          echo "working directory: $(pwd)" && ls -la
+          cd "$GITHUB_WORKSPACE"
+          echo "workspace root: $(pwd)" && ls -la
           # choose correct python executable from .venv
           if [ "$RUNNER_OS" = "Windows" ]; then
             venv_python=".venv\\Scripts\\python.exe"
@@ -41,7 +45,9 @@ jobs:
           fi
           $venv_python -m pip install --upgrade pip
           $venv_python -m pip install maturin pytest
-          $venv_python -m maturin develop
+          # build a wheel and install it instead of `develop`
+          $venv_python -m maturin build --release --out dist
+          $venv_python -m pip install dist/*.whl
           $venv_python -m pytest tests/ -v
 
   build:
