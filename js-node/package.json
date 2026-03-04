@@ -1,0 +1,24 @@
+{
+  "name": "gslb-node",
+  "version": "1.2.0",
+  "description": "A high-efficiency Rust-based GSLB resolver for Node.js",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "gslb_node",
+    "triples": {
+      "defaults": true
+    }
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "artifacts": "napi artifacts"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.14.0"
+  },
+  "engines": {
+    "node": ">= 14"
+  }
+}

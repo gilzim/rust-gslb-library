@@ -1,0 +1,110 @@
+name: Publish Release
+
+on:
+  push:
+    tags: ['v*'] # release when a version tag is pushed
+
+jobs:
+  python-build:
+    name: Python build & test (${{ matrix.os }} / ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.9','3.10','3.11','3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Create virtualenv
+        run: python -m venv .venv
+      - name: Build wheel & run tests
+        shell: bash
+        working-directory: python
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            venv_py=".venv\\Scripts\\python.exe"
+          else
+            venv_py=".venv/bin/python"
+          fi
+          $venv_py -m pip install --upgrade pip
+          $venv_py -m pip install maturin pytest
+          $venv_py -m maturin build --release --out dist
+          $venv_py -m pip install dist/*.whl
+          $venv_py -m pytest tests/ -v
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: py-wheels-${{ matrix.os }}-py${{ matrix.python }}
+          path: python/dist/*.whl
+
+  node-build:
+    name: Node.js build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Build npm package
+        working-directory: js-node
+        run: |
+          npm ci
+          npm run build
+          npm pack
+      - name: Upload node artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-package
+          path: js-node/gslb-node-*.tgz
+
+  browser-build:
+    name: Browser/WebAssembly build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+      - name: Build wasm
+        working-directory: js-browser
+        run: |
+          npm ci
+          npm run build
+      - name: Upload browser artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-wasm
+          path: js-browser/pkg/**
+
+  release:
+    name: Publish release with all artifacts
+    needs: [python-build, node-build, browser-build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gather all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          pattern: '**'
+          merge-multiple: true
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: all-artifacts/**
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

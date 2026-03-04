@@ -1,0 +1,42 @@
+name: Node CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'js-node/**'
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'js-node/**'
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+jobs:
+  node-build:
+    name: Node.js build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Build npm package
+        working-directory: js-node
+        run: |
+          npm ci
+          npm run build
+          npm pack
