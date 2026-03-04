@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "gslb_rust"
-version = "1.0.0"
+version = "1.2.0"
 description = "A high-efficiency Rust-based GSLB resolver for Python"
 requires-python = ">=3.7"
 dependencies = []
