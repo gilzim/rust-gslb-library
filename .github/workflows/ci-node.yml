@@ -2,7 +2,7 @@ name: Node CI
 
 on:
   push:
-    branches: [main, java-script-support]
+    branches: [main]
     paths:
       - 'js-node/**'
       - 'core/**'

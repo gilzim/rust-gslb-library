@@ -2,7 +2,7 @@ name: Browser CI
 
 on:
   push:
-    branches: [main, java-script-support]
+    branches: [main]
     paths:
       - 'js-browser/**'
       - 'core/**'

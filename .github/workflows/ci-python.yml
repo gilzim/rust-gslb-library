@@ -2,7 +2,7 @@ name: Python CI
 
 on:
   push:
-    branches: [main, java-script-support]
+    branches: [main]
     paths:
       - 'python/**'
       - 'core/**'
