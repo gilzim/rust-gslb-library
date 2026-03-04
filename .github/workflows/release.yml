@@ -19,6 +19,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Create virtualenv
+        working-directory: python
         run: python -m venv .venv
       - name: Build wheel & run tests
         shell: bash
