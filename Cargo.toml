@@ -2,6 +2,7 @@
 members = [
     "core",
     "python",
-    "javascript"
+    "js-node",     # Native addon for Node.js (TCP + HTTP)
+    "js-browser"   # WebAssembly for Frontend/Edge (HTTP only)
 ]
 resolver = "2"

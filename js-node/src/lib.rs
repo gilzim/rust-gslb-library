@@ -1,35 +1,30 @@
-use pyo3::prelude::*;
-use gslb_core::CoreResolver; 
+use napi_derive::napi;
+use gslb_core::CoreResolver;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tokio::net::TcpStream;
 use reqwest::Client;
 
-#[derive(FromPyObject)]
-pub enum EndpointConfig {
-    Urls(Vec<String>),
-    WeightedUrls(Vec<(String, usize)>),
-}
-
-#[pyclass]
+#[napi]
 pub struct GslbResolver {
     inner: CoreResolver,
 }
 
-#[pymethods]
+#[napi]
 impl GslbResolver {
-    #[new]
-    #[pyo3(signature = (nodes, interval_secs=5, latency_margin_ms=20))]
-    fn new(nodes: EndpointConfig, interval_secs: u64, latency_margin_ms: u64) -> Self {
-        let config_iter = match nodes {
-            EndpointConfig::Urls(urls) => urls.into_iter().map(|u| (u, 1)).collect(),
-            EndpointConfig::WeightedUrls(weighted) => weighted,
-        };
-        Self { inner: CoreResolver::new(config_iter, interval_secs, latency_margin_ms) }
+    #[napi(constructor)]
+    pub fn new(urls: Vec<String>, interval_secs: u32, latency_margin_ms: u32) -> Self {
+        let config_iter = urls.into_iter().map(|u| (u, 1)).collect();
+        Self { 
+            inner: CoreResolver::new(config_iter, interval_secs as u64, latency_margin_ms as u64) 
+        }
     }
 
-    fn spawn_monitor(&self) {
+    #[napi]
+    pub fn spawn_monitor(&self) {
         let core = self.inner.clone();
+        
+        // Spawns a native OS thread just like Python!
         std::thread::spawn(move || {
             let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
             runtime.block_on(async {
@@ -42,7 +37,7 @@ impl GslbResolver {
                             let start = Instant::now();
                             let mut is_healthy = false;
 
-                            // --- UNIVERSAL CHECK LOGIC ---
+                            // --- UNIVERSAL CHECK LOGIC (TCP + HTTP) ---
                             if endpoint.url.starts_with("tcp://") {
                                 let host_port = endpoint.url.trim_start_matches("tcp://");
                                 let tcp_check = tokio::time::timeout(
@@ -50,17 +45,12 @@ impl GslbResolver {
                                     TcpStream::connect(host_port)
                                 ).await;
 
-                                if let Ok(Ok(_)) = tcp_check {
-                                    is_healthy = true;
-                                }
+                                if let Ok(Ok(_)) = tcp_check { is_healthy = true; }
                             } else {
                                 if let Ok(resp) = client.head(&endpoint.url).send().await {
-                                    if resp.status().is_success() {
-                                        is_healthy = true;
-                                    }
+                                    if resp.status().is_success() { is_healthy = true; }
                                 }
                             }
-                            // -----------------------------
 
                             if is_healthy {
                                 endpoint.latency_ms = start.elapsed().as_millis() as u64;
@@ -79,14 +69,12 @@ impl GslbResolver {
         });
     }
 
-    fn get_endpoint(&self) -> String { self.inner.get_endpoint() }
-    fn get_host_port(&self) -> String { self.inner.get_host_port() }
-    fn report_failure(&self, failed_url: String) { self.inner.report_failure(&failed_url) }
-    fn get_report(&self) -> std::collections::HashMap<String, u64> { self.inner.get_report() }
-}
-
-#[pymodule]
-fn gslb_rust(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<GslbResolver>()?;
-    Ok(())
+    #[napi]
+    pub fn get_endpoint(&self) -> String { self.inner.get_endpoint() }
+    
+    #[napi]
+    pub fn get_host_port(&self) -> String { self.inner.get_host_port() }
+    
+    #[napi]
+    pub fn report_failure(&self, failed_url: String) { self.inner.report_failure(&failed_url) }
 }

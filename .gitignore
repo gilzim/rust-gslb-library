@@ -101,6 +101,24 @@ Cargo.lock
 *.swo
 *.bak
 
+# Node.js / JavaScript
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.pnpm-debug.log*
+
+# JavaScript build outputs
+dist/
+build/
+*.js.map
+*.min.js
+
+# WebAssembly
+*.wasm
+
 # Ensure default Rust ignores remain
 
 target/
