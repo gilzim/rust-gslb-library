@@ -1,0 +1,51 @@
+name: Python CI
+
+on:
+  push:
+    branches: [main, java-script-support]
+    paths:
+      - 'python/**'
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'python/**'
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+jobs:
+  python-build:
+    name: Python build & test (${{ matrix.os }} / ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.9','3.10','3.11','3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Create virtualenv
+        run: python -m venv .venv
+
+      - name: Build wheel & run tests
+        shell: bash
+        working-directory: python
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            venv_py=".venv\\Scripts\\python.exe"
+          else
+            venv_py=".venv/bin/python"
+          fi
+          $venv_py -m pip install --upgrade pip
+          $venv_py -m pip install maturin pytest
+          $venv_py -m maturin build --release --out dist
+          $venv_py -m pip install dist/*.whl
+          $venv_py -m pytest tests/ -v

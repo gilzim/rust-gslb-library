@@ -1,0 +1,39 @@
+name: Browser CI
+
+on:
+  push:
+    branches: [main, java-script-support]
+    paths:
+      - 'js-browser/**'
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'js-browser/**'
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+jobs:
+  browser-build:
+    name: Browser/WebAssembly build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      - name: Build wasm
+        working-directory: js-browser
+        run: |
+          npm ci
+          npm run build
