@@ -3,9 +3,9 @@ use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
+use tokio::net::TcpStream;
 use reqwest::Client;
 
-// This enum allows Python to pass EITHER a list of URLs or a list of (URL, Weight) tuples
 #[derive(FromPyObject)]
 pub enum EndpointConfig {
     Urls(Vec<String>),
@@ -23,29 +23,33 @@ struct EndpointStats {
 #[pyclass]
 pub struct GslbResolver {
     stats: Arc<RwLock<Vec<EndpointStats>>>,
-    active_pool: Arc<RwLock<Vec<String>>>, // The optimal nodes we are currently routing to
+    active_pool: Arc<RwLock<Vec<String>>>,
     counter: Arc<AtomicUsize>,
     interval_secs: u64,
-    latency_margin_ms: u64, // The "close enough" threshold
+    latency_margin_ms: u64,
 }
 
 #[pymethods]
 impl GslbResolver {
-    /// Initialize with either `["http://node1"]` or `[("http://node1", 3)]`.
-    /// `latency_margin_ms` defines how close a secondary node must be to the best node to receive traffic.
     #[new]
     #[pyo3(signature = (nodes, interval_secs=5, latency_margin_ms=20))]
     fn new(nodes: EndpointConfig, interval_secs: u64, latency_margin_ms: u64) -> Self {
         let mut stats = Vec::new();
         let mut initial_pool = Vec::new();
 
-        // Standardize the input: if weights aren't provided, default to 1.
         let config_iter: Vec<(String, usize)> = match nodes {
             EndpointConfig::Urls(urls) => urls.into_iter().map(|u| (u, 1)).collect(),
             EndpointConfig::WeightedUrls(weighted) => weighted,
         };
 
-        for (url, weight) in config_iter {
+        for (raw_url, weight) in config_iter {
+            // Automatically default to tcp:// if no protocol is provided
+            let url = if raw_url.starts_with("http://") || raw_url.starts_with("https://") || raw_url.starts_with("tcp://") {
+                raw_url
+            } else {
+                format!("tcp://{}", raw_url)
+            };
+
             for _ in 0..weight {
                 initial_pool.push(url.clone());
             }
@@ -75,48 +79,75 @@ impl GslbResolver {
         let margin = self.latency_margin_ms;
 
         std::thread::spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
             runtime.block_on(async {
-                let client = Client::builder().timeout(Duration::from_secs(2)).build().unwrap();
+                let client = Client::builder()
+                    .timeout(Duration::from_secs(2))
+                    .build()
+                    .unwrap();
 
                 loop {
                     let mut current_stats = stats_clone.write().unwrap();
                     let mut min_latency = u64::MAX;
 
-                    // 1. Probe all nodes and find the absolute best latency
                     for endpoint in current_stats.iter_mut() {
                         let start = Instant::now();
-                        let res = client.head(&endpoint.url).send().await;
+                        let mut is_healthy = false;
 
-                        match res {
-                            Ok(resp) if resp.status().is_success() => {
-                                endpoint.latency_ms = start.elapsed().as_millis() as u64;
-                                endpoint.is_healthy = true;
-                                if endpoint.latency_ms < min_latency {
-                                    min_latency = endpoint.latency_ms;
+                        // --- UNIVERSAL CHECK LOGIC ---
+                        if endpoint.url.starts_with("tcp://") {
+                            // Strip prefix to get host:port (e.g., db.com:5432)
+                            let host_port = endpoint.url.trim_start_matches("tcp://");
+                            
+                            // 2-second timeout for the TCP Handshake
+                            let tcp_check = tokio::time::timeout(
+                                Duration::from_secs(2),
+                                TcpStream::connect(host_port)
+                            ).await;
+
+                            if let Ok(Ok(_)) = tcp_check {
+                                is_healthy = true;
+                            }
+                        } else {
+                            // Standard HTTP/HTTPS HEAD Probe
+                            let res = client.head(&endpoint.url).send().await;
+                            if let Ok(resp) = res {
+                                if resp.status().is_success() {
+                                    is_healthy = true;
                                 }
                             }
-                            _ => {
-                                endpoint.latency_ms = u64::MAX;
-                                endpoint.is_healthy = false;
+                        }
+                        // -----------------------------
+
+                        if is_healthy {
+                            endpoint.latency_ms = start.elapsed().as_millis() as u64;
+                            endpoint.is_healthy = true;
+                            if endpoint.latency_ms < min_latency {
+                                min_latency = endpoint.latency_ms;
                             }
+                        } else {
+                            endpoint.latency_ms = u64::MAX;
+                            endpoint.is_healthy = false;
                         }
                     }
 
-                    // 2. Build routing pool containing ONLY the optimal nodes (within the margin)
+                    // Rebuild routing pool with healthy, optimal nodes
                     let mut new_pool = Vec::new();
                     let threshold = min_latency.saturating_add(margin);
 
                     for e in current_stats.iter() {
                         if e.is_healthy && e.latency_ms <= threshold {
-                            // If it's close enough to the best, add it to the rotation (respecting weight)
                             for _ in 0..e.weight {
                                 new_pool.push(e.url.clone());
                             }
                         }
                     }
 
-                    // Fallback to everything if we have no healthy optimal nodes
+                    // Fallback mechanism if everything fails
                     if new_pool.is_empty() {
                         for e in current_stats.iter() { new_pool.push(e.url.clone()); }
                     }
@@ -130,22 +161,38 @@ impl GslbResolver {
         });
     }
 
-    /// Fetches the next best endpoint based on weights, latency, and margins.
     fn get_endpoint(&self) -> String {
         let pool = self.active_pool.read().unwrap();
         if pool.is_empty() { return String::new(); }
-        // Lock-free atomic increment
         let count = self.counter.fetch_add(1, Ordering::Relaxed);
         pool[count % pool.len()].clone()
     }
 
-    /// Immediately strike a failed node from the active rotation
+    /// Convenience method to return strictly the host:port.
+    /// Strips protocols (tcp://, http://) and any URL paths.
+    fn get_host_port(&self) -> String {
+        let endpoint = self.get_endpoint();
+        if endpoint.is_empty() { return String::new(); }
+
+        let stripped = if let Some(s) = endpoint.strip_prefix("tcp://") {
+            s
+        } else if let Some(s) = endpoint.strip_prefix("http://") {
+            s
+        } else if let Some(s) = endpoint.strip_prefix("https://") {
+            s
+        } else {
+            &endpoint
+        };
+
+        // Split by '/' to remove any paths (e.g., from HTTP URLs)
+        stripped.split('/').next().unwrap_or(stripped).to_string()
+    }
+
     fn report_failure(&self, failed_url: String) {
         let mut stats = self.stats.write().unwrap();
         let mut min_latency = u64::MAX;
         let mut changed = false;
 
-        // Mark bad and find the new minimum latency among survivors
         for endpoint in stats.iter_mut() {
             if endpoint.url == failed_url {
                 endpoint.is_healthy = false;
@@ -156,7 +203,6 @@ impl GslbResolver {
             }
         }
 
-        // Rebuild the active pool instantly
         if changed {
             let mut new_pool = Vec::new();
             let threshold = min_latency.saturating_add(self.latency_margin_ms);
