@@ -67,7 +67,7 @@ while True:
     best_endpoint = resolver.get_endpoint()
 
     print(f"Routing to: {best_endpoint}")
-    # response = requests.get(f"{best_endpoint}/data")
+    response = requests.get(f"{best_endpoint}/data")
 
     time.sleep(1)
 ```
