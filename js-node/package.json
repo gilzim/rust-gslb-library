@@ -13,10 +13,12 @@
   "scripts": {
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
-    "artifacts": "napi artifacts"
+    "artifacts": "napi artifacts",
+    "test": "jest --forceExit"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^2.14.0"
+    "@napi-rs/cli": "^2.14.0",
+    "jest": "^30.2.0"
   },
   "engines": {
     "node": ">= 14"
