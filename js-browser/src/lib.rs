@@ -3,10 +3,13 @@ use gslb_core::CoreResolver;
 use reqwest::Client;
 use gloo_timers::future::sleep;
 use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[wasm_bindgen]
 pub struct GslbResolver {
     inner: CoreResolver,
+    stop_signal: Arc<AtomicBool>,
 }
 
 #[wasm_bindgen]
@@ -19,17 +22,21 @@ impl GslbResolver {
                 config_iter.push((url, 1)); 
             }
         }
-        Self { inner: CoreResolver::new(config_iter, interval_secs as u64, latency_margin_ms as u64) }
+        Self { 
+            inner: CoreResolver::new(config_iter, interval_secs as u64, latency_margin_ms as u64),
+            stop_signal: Arc::new(AtomicBool::new(false)),
+        }
     }
 
     #[wasm_bindgen]
     pub fn spawn_monitor(&self) {
         let core = self.inner.clone();
+        let stop_signal = self.stop_signal.clone();
         
         // Spawns asynchronously on the Browser Event Loop
         wasm_bindgen_futures::spawn_local(async move {
             let client = Client::new();
-            loop {
+            while !stop_signal.load(Ordering::Relaxed) {
                 let mut min_latency = u64::MAX;
                 {
                     let mut current_stats = core.stats.write().unwrap();
@@ -68,6 +75,12 @@ impl GslbResolver {
     #[wasm_bindgen]
     pub fn get_host_port(&self) -> String { self.inner.get_host_port() }
     
+    
     #[wasm_bindgen]
     pub fn report_failure(&self, failed_url: String) { self.inner.report_failure(&failed_url) }
+
+    #[wasm_bindgen]
+    pub fn stop_monitor(&self) {
+        self.stop_signal.store(true, Ordering::Relaxed);
+    }
 }

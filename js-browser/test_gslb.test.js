@@ -13,6 +13,7 @@ global.crypto = crypto.webcrypto;
 
 describe('GslbResolver Browser Binding', () => {
     let GslbResolver;
+    let resolvers = [];
 
     beforeAll(() => {
         try {
@@ -38,6 +39,7 @@ describe('GslbResolver Browser Binding', () => {
         ];
         
         const resolver = new GslbResolver(nodes, 5, 20);
+        resolvers.push(resolver);
         expect(resolver).toBeDefined();
 
         resolver.spawn_monitor();
@@ -53,6 +55,7 @@ describe('GslbResolver Browser Binding', () => {
         ];
         
         const resolver = new GslbResolver(nodes, 5, 20);
+        resolvers.push(resolver);
         
         resolver.report_failure("https://bad.api.com");
         
@@ -63,6 +66,7 @@ describe('GslbResolver Browser Binding', () => {
     it('returns the host port correctly', () => {
         const nodes = ["https://my-api.com:8080"];
         const resolver = new GslbResolver(nodes, 5, 20);
+        resolvers.push(resolver);
         const hostPort = resolver.get_host_port();
         expect(hostPort).toBe("my-api.com:8080");
     });
@@ -70,6 +74,9 @@ describe('GslbResolver Browser Binding', () => {
     // Wait a brief moment to allow the WASM monitor threads to spin down
     // to prevent memory access violations on process exit.
     afterAll((done) => {
+        resolvers.forEach(r => {
+            try { r.stop_monitor(); } catch (e) {}
+        });
         setTimeout(done, 100);
     });
 });
