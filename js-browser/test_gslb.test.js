@@ -17,12 +17,12 @@ describe('GslbResolver Browser Binding', () => {
     beforeAll(() => {
         try {
             // For Jest running in a Node environment against the nodejs target
-            const mod = require('./pkg-node/gslb-browser-source');
+            const mod = require('./pkg-node/gslb_browser_source.js');
             GslbResolver = mod.GslbResolver;
         } catch (e) {
             try {
                 // Fallback to standard pkg if built for bundler/web 
-                const mod = require('./pkg/gslb-browser-source');
+                const mod = require('./pkg/gslb_browser_source.js');
                 GslbResolver = mod.GslbResolver;
             } catch (err) {
                 console.error("Could not load WASM module, ensure 'npm run build:nodejs' has been executed.");
