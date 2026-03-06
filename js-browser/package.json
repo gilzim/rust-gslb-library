@@ -5,9 +5,11 @@
   "scripts": {
     "build": "wasm-pack build --target web --out-dir pkg",
     "build:bundler": "wasm-pack build --target bundler --out-dir pkg-bundler",
-    "build:nodejs": "wasm-pack build --target nodejs --out-dir pkg-node"
+    "build:nodejs": "wasm-pack build --target nodejs --out-dir pkg-node",
+    "test": "jest"
   },
   "devDependencies": {
+    "jest-environment-jsdom": "^30.2.0",
     "rimraf": "^5.0.0"
   }
 }
