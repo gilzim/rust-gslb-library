@@ -38,4 +38,5 @@ jobs:
           npm ci
           npm run build
           npm run build:nodejs
+          ls -la pkg-node/
           npm run test
