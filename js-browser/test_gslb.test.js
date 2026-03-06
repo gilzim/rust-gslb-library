@@ -1,7 +1,15 @@
 // Testing the js-browser WASM wrapper
 const { TextEncoder, TextDecoder } = require('util');
+const fetch = require('node-fetch');
+const crypto = require('crypto');
+
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
+global.fetch = fetch;
+global.Headers = fetch.Headers;
+global.Request = fetch.Request;
+global.Response = fetch.Response;
+global.crypto = crypto.webcrypto;
 
 describe('GslbResolver Browser Binding', () => {
     let GslbResolver;
@@ -58,4 +66,11 @@ describe('GslbResolver Browser Binding', () => {
         const hostPort = resolver.get_host_port();
         expect(hostPort).toBe("my-api.com:8080");
     });
+
+    // Wait a brief moment to allow the WASM monitor threads to spin down
+    // to prevent memory access violations on process exit.
+    afterAll((done) => {
+        setTimeout(done, 100);
+    });
 });
+
