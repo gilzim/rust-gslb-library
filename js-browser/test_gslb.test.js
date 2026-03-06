@@ -1,4 +1,7 @@
 // Testing the js-browser WASM wrapper
+const { TextEncoder, TextDecoder } = require('util');
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
 
 describe('GslbResolver Browser Binding', () => {
     let GslbResolver;
