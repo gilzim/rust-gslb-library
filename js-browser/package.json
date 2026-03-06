@@ -1,6 +1,6 @@
 {
   "name": "gslb-browser-source",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Build scripts for the WebAssembly GSLB resolver",
   "scripts": {
     "build": "wasm-pack build --target web --out-dir pkg",
