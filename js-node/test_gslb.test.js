@@ -47,6 +47,17 @@ describe('GslbResolver Node.js Binding', () => {
         expect(hostPort).toBe("my-api.com:8080");
     });
 
+    it('reports failure by hostPort identifier', () => {
+        const nodes = ["https://fail-me.com:9000", "https://stay-alive.com:9000"];
+        const resolver = new GslbResolver(nodes, 5, 20);
+        resolvers.push(resolver);
+        
+        resolver.reportFailure("fail-me.com:9000");
+        
+        const endpoint = resolver.getEndpoint();
+        expect(endpoint).toBe("https://stay-alive.com:9000");
+    });
+
     // Wait a brief moment to allow the tokio monitor thread to spin down
     // before Jest aggressively exits the native process, to prevent segfaults.
     afterAll((done) => {

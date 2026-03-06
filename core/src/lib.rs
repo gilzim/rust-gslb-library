@@ -57,31 +57,34 @@ impl CoreResolver {
         pool[count % pool.len()].clone()
     }
 
-    /// Extracted get_host_port logic
-    pub fn get_host_port(&self) -> String {
-        let endpoint = self.get_endpoint();
-        if endpoint.is_empty() { return String::new(); }
-
-        let stripped = if let Some(s) = endpoint.strip_prefix("tcp://") {
+    /// Helper to extract host:port from a URL string
+    fn extract_host_port(url: &str) -> String {
+        let stripped = if let Some(s) = url.strip_prefix("tcp://") {
             s
-        } else if let Some(s) = endpoint.strip_prefix("http://") {
+        } else if let Some(s) = url.strip_prefix("http://") {
             s
-        } else if let Some(s) = endpoint.strip_prefix("https://") {
+        } else if let Some(s) = url.strip_prefix("https://") {
             s
         } else {
-            &endpoint
+            url
         };
-
         stripped.split('/').next().unwrap_or(stripped).to_string()
     }
 
-    pub fn report_failure(&self, failed_url: &str) {
+    pub fn get_host_port(&self) -> String {
+        let endpoint = self.get_endpoint();
+        if endpoint.is_empty() { return String::new(); }
+        Self::extract_host_port(&endpoint)
+    }
+
+    pub fn report_failure(&self, identifier: &str) {
         let mut stats = self.stats.write().unwrap();
         let mut min_latency = u64::MAX;
         let mut changed = false;
 
         for endpoint in stats.iter_mut() {
-            if endpoint.url == failed_url {
+            let is_match = endpoint.url == identifier || Self::extract_host_port(&endpoint.url) == identifier;
+            if is_match {
                 endpoint.is_healthy = false;
                 endpoint.latency_ms = u64::MAX;
                 changed = true;

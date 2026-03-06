@@ -71,6 +71,17 @@ describe('GslbResolver Browser Binding', () => {
         expect(hostPort).toBe("my-api.com:8080");
     });
 
+    it('reports failure by host_port identifier', () => {
+        const nodes = ["https://fail-me.com:9000", "https://stay-alive.com:9000"];
+        const resolver = new GslbResolver(nodes, 5, 20);
+        resolvers.push(resolver);
+        
+        resolver.report_failure("fail-me.com:9000");
+        
+        const endpoint = resolver.get_endpoint();
+        expect(endpoint).toBe("https://stay-alive.com:9000");
+    });
+
     // Wait a brief moment to allow the WASM monitor threads to spin down
     // to prevent memory access violations on process exit.
     afterAll((done) => {

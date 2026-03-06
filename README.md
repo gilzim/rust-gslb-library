@@ -2,7 +2,7 @@
 
 [![Python CI](https://github.com/gilzim/rust-gslb-library/actions/workflows/ci-python.yml/badge.svg)](https://github.com/gilzim/rust-gslb-library/actions/workflows/ci-python.yml) [![Node CI](https://github.com/gilzim/rust-gslb-library/actions/workflows/ci-node.yml/badge.svg)](https://github.com/gilzim/rust-gslb-library/actions/workflows/ci-node.yml) [![Browser CI](https://github.com/gilzim/rust-gslb-library/actions/workflows/ci-browser.yml/badge.svg)](https://github.com/gilzim/rust-gslb-library/actions/workflows/ci-browser.yml) [![Release](https://img.shields.io/github/v/release/gilzim/rust-gslb-library)](https://github.com/gilzim/rust-gslb-library/releases/latest)
 
-A blazing‑fast, minimal‑footprint Global Server Load Balancing (GSLB) client library. Powered by a native Rust engine, this library provides bindings for **Python**, **Node.js**, and the **Browser** (via WebAssembly). The current release is **1.2.0**.
+A blazing‑fast, minimal‑footprint Global Server Load Balancing (GSLB) client library. Powered by a native Rust engine, this library provides bindings for **Python**, **Node.js**, and the **Browser** (via WebAssembly). The current release is **1.2.2**.
 
 `gslb_rust` allows applications to perform client‑side load balancing with intelligent latency‑based routing, Weighted Round Robin (WRR), and instant failover. All of this is achieved without blocking the main execution thread of your host environment (such as the Python GIL or the Node.js/Browser event loop) and requires minimal CPU and memory overhead.
 
