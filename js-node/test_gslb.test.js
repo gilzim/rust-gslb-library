@@ -41,4 +41,10 @@ describe('GslbResolver Node.js Binding', () => {
         const hostPort = resolver.getHostPort();
         expect(hostPort).toBe("my-api.com:8080");
     });
+
+    // Wait a brief moment to allow the tokio monitor thread to spin down
+    // before Jest aggressively exits the native process, to prevent segfaults.
+    afterAll((done) => {
+        setTimeout(done, 100);
+    });
 });
