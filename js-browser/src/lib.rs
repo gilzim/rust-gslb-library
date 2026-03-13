@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use gslb_core::CoreResolver; 
+use gslb_core::{CoreResolver, UNHEALTHY_LATENCY}; 
 use reqwest::Client;
 use gloo_timers::future::sleep;
 use std::time::Duration;
@@ -37,9 +37,9 @@ impl GslbResolver {
         wasm_bindgen_futures::spawn_local(async move {
             let client = Client::new();
             while !stop_signal.load(Ordering::Relaxed) {
-                let mut min_latency = u64::MAX;
+                let mut min_latency = UNHEALTHY_LATENCY;
                 {
-                    let mut current_stats = core.stats.write().unwrap();
+                    let mut current_stats = core.stats.write().unwrap_or_else(|e| e.into_inner());
                     for endpoint in current_stats.iter_mut() {
                         let start = js_sys::Date::now();
                         let mut is_healthy = false;
@@ -58,7 +58,7 @@ impl GslbResolver {
                             endpoint.is_healthy = true;
                             if endpoint.latency_ms < min_latency { min_latency = endpoint.latency_ms; }
                         } else {
-                            endpoint.latency_ms = u64::MAX;
+                            endpoint.latency_ms = UNHEALTHY_LATENCY;
                             endpoint.is_healthy = false;
                         }
                     }
@@ -74,8 +74,17 @@ impl GslbResolver {
     
     #[wasm_bindgen]
     pub fn get_host_port(&self) -> String { self.inner.get_host_port() }
-    
-    
+
+    /// Returns a JS Map of { url -> latency_ms } for all healthy endpoints.
+    #[wasm_bindgen]
+    pub fn get_report(&self) -> js_sys::Map {
+        let map = js_sys::Map::new();
+        for (url, latency_ms) in self.inner.get_report() {
+            map.set(&JsValue::from_str(&url), &JsValue::from_f64(latency_ms as f64));
+        }
+        map
+    }
+
     #[wasm_bindgen]
     pub fn report_failure(&self, failed_url: String) { self.inner.report_failure(&failed_url) }
 

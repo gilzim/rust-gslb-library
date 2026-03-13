@@ -1,5 +1,6 @@
 use napi_derive::napi;
-use gslb_core::CoreResolver;
+use gslb_core::{CoreResolver, UNHEALTHY_LATENCY};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,9 +36,9 @@ impl GslbResolver {
             runtime.block_on(async {
                 let client = Client::builder().timeout(Duration::from_secs(2)).build().unwrap();
                 while !stop_signal.load(Ordering::Relaxed) {
-                    let mut min_latency = u64::MAX;
+                    let mut min_latency = UNHEALTHY_LATENCY;
                     {
-                        let mut current_stats = core.stats.write().unwrap();
+                        let mut current_stats = core.stats.write().unwrap_or_else(|e| e.into_inner());
                         for endpoint in current_stats.iter_mut() {
                             let start = Instant::now();
                             let mut is_healthy = false;
@@ -62,7 +63,7 @@ impl GslbResolver {
                                 endpoint.is_healthy = true;
                                 if endpoint.latency_ms < min_latency { min_latency = endpoint.latency_ms; }
                             } else {
-                                endpoint.latency_ms = u64::MAX;
+                                endpoint.latency_ms = UNHEALTHY_LATENCY;
                                 endpoint.is_healthy = false;
                             }
                         }
@@ -80,7 +81,11 @@ impl GslbResolver {
     #[napi]
     pub fn get_host_port(&self) -> String { self.inner.get_host_port() }
     
-    
+    #[napi]
+    pub fn get_report(&self) -> HashMap<String, f64> {
+        self.inner.get_report().into_iter().map(|(k, v)| (k, v as f64)).collect()
+    }
+
     #[napi]
     pub fn report_failure(&self, failed_url: String) { self.inner.report_failure(&failed_url) }
 

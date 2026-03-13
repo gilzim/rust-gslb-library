@@ -2,6 +2,9 @@ use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
 
+/// Sentinel value indicating an endpoint is unhealthy or has not yet been probed.
+pub const UNHEALTHY_LATENCY: u64 = u64::MAX;
+
 #[derive(Clone)]
 pub struct EndpointStats {
     pub url: String,
@@ -36,7 +39,7 @@ impl CoreResolver {
                 initial_pool.push(url.clone());
             }
             stats.push(EndpointStats {
-                url, weight, latency_ms: u64::MAX, is_healthy: true,
+                url, weight, latency_ms: UNHEALTHY_LATENCY, is_healthy: true,
             });
         }
         if initial_pool.is_empty() { initial_pool.push(String::new()); }
@@ -51,7 +54,7 @@ impl CoreResolver {
     }
 
     pub fn get_endpoint(&self) -> String {
-        let pool = self.active_pool.read().unwrap();
+        let pool = self.active_pool.read().unwrap_or_else(|e| e.into_inner());
         if pool.is_empty() { return String::new(); }
         let count = self.counter.fetch_add(1, Ordering::Relaxed);
         pool[count % pool.len()].clone()
@@ -78,15 +81,15 @@ impl CoreResolver {
     }
 
     pub fn report_failure(&self, identifier: &str) {
-        let mut stats = self.stats.write().unwrap();
-        let mut min_latency = u64::MAX;
+        let mut stats = self.stats.write().unwrap_or_else(|e| e.into_inner());
+        let mut min_latency = UNHEALTHY_LATENCY;
         let mut changed = false;
 
         for endpoint in stats.iter_mut() {
             let is_match = endpoint.url == identifier || Self::extract_host_port(&endpoint.url) == identifier;
             if is_match {
                 endpoint.is_healthy = false;
-                endpoint.latency_ms = u64::MAX;
+                endpoint.latency_ms = UNHEALTHY_LATENCY;
                 changed = true;
             } else if endpoint.is_healthy && endpoint.latency_ms < min_latency {
                 min_latency = endpoint.latency_ms;
@@ -96,13 +99,13 @@ impl CoreResolver {
     }
 
     pub fn get_report(&self) -> HashMap<String, u64> {
-        self.stats.read().unwrap().iter().filter(|e| e.is_healthy)
+        self.stats.read().unwrap_or_else(|e| e.into_inner()).iter().filter(|e| e.is_healthy)
             .map(|e| (e.url.clone(), e.latency_ms))
             .collect()
     }
 
     pub fn rebuild_pool(&self, min_latency: u64) {
-        let stats = self.stats.read().unwrap();
+        let stats = self.stats.read().unwrap_or_else(|e| e.into_inner());
         let mut new_pool = Vec::new();
         let threshold = min_latency.saturating_add(self.latency_margin_ms);
 
@@ -114,6 +117,6 @@ impl CoreResolver {
         if new_pool.is_empty() {
             for e in stats.iter() { new_pool.push(e.url.clone()); }
         }
-        *self.active_pool.write().unwrap() = new_pool;
+        *self.active_pool.write().unwrap_or_else(|e| e.into_inner()) = new_pool;
     }
 }
